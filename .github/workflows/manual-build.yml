@@ -147,7 +147,9 @@ jobs:
             *) echo "::error::Unsupported build_type: $BUILD_TYPE"; exit 1 ;;
           esac
 
-          GRADLE_ARGS=("$TASK" "--no-daemon")
+          # Upstream `models` release does not currently publish prebuilt libcytranslate-*.so;
+          # allow manual release builds to proceed with a warning (offline translation disabled).
+          GRADLE_ARGS=("$TASK" "--no-daemon" "-PallowMissingTranslateLib=true")
 
           if [ "$ABI_MODE" = "arm64-v8a" ]; then
             GRADLE_ARGS+=("--init-script" "scripts/phone-release-abi.gradle" "-PcyimeReleaseAbi=arm64-v8a")
