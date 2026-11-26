@@ -11,6 +11,7 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.MutableFloatState
 import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Modifier
@@ -26,6 +27,13 @@ internal val LocalFloatingBottomClearance = staticCompositionLocalOf<MutableFloa
 // The keycap inset belongs to the key's touch target but is part of the visible gap below its ink.
 internal val LocalFloatingKeyCapInset = staticCompositionLocalOf<MutableFloatState?> { null }
 internal val KeyboardGridBottomMargin = 8.dp
+
+/**
+ * 底排键帽下方、键区自己留的那一截。固定键盘底下就是系统栏（或键盘自己的底部留白）时设成 0：
+ * 最下一排直接贴着卡片底边，空格键下面不再多出一条黑（11-26 用户：空格键下面就是系统栏，不要黑色间隔）。
+ * 悬浮键盘照旧用 [KeyboardGridBottomMargin]，拖动条那一截不动。
+ */
+internal val LocalKeyboardGridBottomMargin = compositionLocalOf { KeyboardGridBottomMargin }
 
 
 

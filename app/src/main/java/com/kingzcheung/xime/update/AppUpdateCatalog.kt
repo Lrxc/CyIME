@@ -29,21 +29,23 @@ data class AppReleaseAsset(
 )
 
 /**
- * 不需要自己的服务器：版本信息直接取 GitHub Releases。
+ * 不需要自己的服务器：版本信息直接取本仓（Lrxc/CyIME）的 GitHub Releases。
  * 同一个仓库里还有 Windows 版（windows-日期）和模型（models）的发布，只认 x.y.z 标签；草稿和预发布不算。
  *
- * 国内常连不上 GitHub：发布时 scripts/store/sync_modelscope.py app 把同一版安装包传到魔搭 app/<版本>/，
- * 再写 app/releases.json（格式和 GitHub 发布列表相同，只有最新一版）。两边的安装包逐字节相同。
+ * 上游 Cyletix/CyIME 会把同一版传到魔搭做镜像；本仓没有做，MODELSCOPE_RELEASES / MODELSCOPE_PAGE 只为兼容保留，
+ * 更新检查和发布页都只走本仓的 GitHub（否则会拿到上游那一份包名不同的安装包）。
  */
 object AppUpdateCatalog {
-    const val RELEASES_API = "https://api.github.com/repos/Cyletix/CyIME/releases?per_page=30"
-    const val RELEASES_PAGE = "https://github.com/Cyletix/CyIME/releases"
+    const val RELEASES_API = "https://api.github.com/repos/Lrxc/CyIME/releases?per_page=30"
+    const val RELEASES_PAGE = "https://github.com/Lrxc/CyIME/releases"
     const val MODELSCOPE_RELEASES = DownloadMirrors.CYIME_MODELSCOPE + "app/releases.json"
     const val MODELSCOPE_PAGE = "https://www.modelscope.cn/models/Cyletix/cyime-model/files"
 
-    fun releasesPage(domestic: Boolean): String = if (domestic) MODELSCOPE_PAGE else RELEASES_PAGE
+    // 本仓（fork）只发 GitHub Releases，没有魔搭镜像那一份：发布页一律回本仓的 GitHub 页面，不把中文用户
+    // 带去上游的魔搭仓库（那是另一份包）。
+    fun releasesPage(): String = RELEASES_PAGE
 
-    fun githubAssetUrl(tag: String, name: String) = "https://github.com/Cyletix/CyIME/releases/download/$tag/$name"
+    fun githubAssetUrl(tag: String, name: String) = "https://github.com/Lrxc/CyIME/releases/download/$tag/$name"
 
     fun modelscopeAssetUrl(tag: String, name: String) = DownloadMirrors.CYIME_MODELSCOPE + "app/$tag/$name"
 

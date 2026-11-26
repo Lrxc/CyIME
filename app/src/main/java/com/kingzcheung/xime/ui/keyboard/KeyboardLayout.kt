@@ -641,7 +641,7 @@ fun KeyboardLayout(
                     modifier = Modifier
                         .fillMaxWidth()
                         .fillMaxHeight()
-                        .padding(bottom = KeyboardGridBottomMargin)
+                        .padding(bottom = LocalKeyboardGridBottomMargin.current)
                         .then(if (splitKeyboard) Modifier.testTag("split-keyboard") else Modifier),
             ) {
                 // Hexagon caps reach a sixth of a row beyond their cell; keep that room above the

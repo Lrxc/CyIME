@@ -11,7 +11,6 @@ import android.os.Build
 import android.provider.Settings
 import androidx.core.content.FileProvider
 import com.kingzcheung.xime.BuildConfig
-import com.kingzcheung.xime.model.DownloadMirrors
 import com.kingzcheung.xime.util.FileLogger
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
@@ -43,7 +42,7 @@ sealed interface AppUpdateState {
 }
 
 /**
- * 应用内检查更新：查 GitHub Releases（国内先查魔搭上的副本，失败再换另一边），下载同版本类型（轻量版 / 完整版）的安装包，核对哈希和签名后交给系统安装程序。
+ * 应用内检查更新：查本仓（Lrxc/CyIME）的 GitHub Releases，下载同版本类型（轻量版 / 完整版）的安装包，核对哈希和签名后交给系统安装程序。
  * Android 不允许普通应用静默安装，每次都由用户在系统界面里点「安装」。自动检查默认打开（只查不下载），手动关过的保持关。
  */
 object AppUpdater {
@@ -120,7 +119,7 @@ object AppUpdater {
         job = scope.launch {
             if (manual) _state.value = AppUpdateState.Checking
             try {
-                val latest = fetchLatest(DownloadMirrors.prefersDomestic(app))
+                val latest = fetchLatest()
                 prefs(app).edit().putLong(KEY_LAST_CHECK, System.currentTimeMillis()).apply()
                 _state.value = when {
                     latest != null && AppUpdateCatalog.isNewer(latest.version, BuildConfig.VERSION_NAME) -> AppUpdateState.Available(latest)
@@ -136,24 +135,15 @@ object AppUpdater {
         }
     }
 
-    /** 国内先查魔搭，海外先查 GitHub；一边连不上、被限流或没有内容就换另一边。两边都失败才算失败。 */
-    private fun fetchLatest(domestic: Boolean): AppRelease? {
-        var firstError: Exception? = null
-        for (fromModelScope in if (domestic) listOf(true, false) else listOf(false, true)) {
-            try {
-                val latest = fetchFrom(fromModelScope) ?: continue
-                // 自用版（打包器「装到我的设备」）带个人九键模型、CyLM 和私有释义，公开包覆盖上去会把它们换掉：
-                // 只提示有新版，不给一键下载安装，点了去发布页。
-                return if (privateBuild) latest.copy(asset = null) else AppUpdateCatalog.withMirror(latest, fromModelScope)
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                FileLogger.w(TAG, "${if (fromModelScope) "魔搭" else "GitHub"} 查不到更新：${e.message}")
-                if (firstError == null) firstError = e
-            }
-        }
-        firstError?.let { throw it }
-        return null
+    /**
+     * 本仓（fork）只发 GitHub Releases，没有魔搭上那一份镜像：只查本仓的 GitHub，不再按国内/海外换源
+     * （换到魔搭读到的是上游仓库的版本，包名都不一样，装上必然失败）。
+     */
+    private fun fetchLatest(): AppRelease? {
+        val latest = fetchFrom(fromModelScope = false) ?: return null
+        // 自用版（打包器「装到我的设备」）带个人九键模型、CyLM 和私有释义，公开包覆盖上去会把它们换掉：
+        // 只提示有新版，不给一键下载安装，点了去发布页。
+        return if (privateBuild) latest.copy(asset = null) else latest
     }
 
     private fun fetchFrom(fromModelScope: Boolean): AppRelease? {

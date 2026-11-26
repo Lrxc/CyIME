@@ -70,7 +70,6 @@ import com.kingzcheung.xime.settings.SettingsPreferences
 import com.kingzcheung.xime.ui.theme.MaterialLevel
 import com.kingzcheung.xime.ui.theme.VisualStyles
 import com.kingzcheung.xime.ui.theme.visualMaterial
-import com.kingzcheung.xime.model.DownloadMirrors
 import com.kingzcheung.xime.update.AppUpdateCatalog
 import com.kingzcheung.xime.util.FileLogger
 import com.kingzcheung.xime.platform.AndroidPlatform
@@ -242,8 +241,8 @@ fun AboutContent(
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                // 国内打开魔搭上的同一份安装包，海外打开 GitHub 发布页。
-                                .clickable { uriHandler.openUri(AppUpdateCatalog.releasesPage(DownloadMirrors.prefersDomestic(context))) },
+                                // 本仓只发 GitHub Releases：一律打开本仓的发布页。
+                                .clickable { uriHandler.openUri(AppUpdateCatalog.releasesPage()) },
                             horizontalArrangement = Arrangement.Center,
                             verticalAlignment = Alignment.CenterVertically
                         ) {

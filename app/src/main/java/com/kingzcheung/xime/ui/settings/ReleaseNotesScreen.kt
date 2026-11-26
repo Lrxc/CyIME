@@ -48,7 +48,6 @@ import androidx.compose.ui.text.withLink
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import com.kingzcheung.xime.BuildConfig
-import com.kingzcheung.xime.model.DownloadMirrors
 import com.kingzcheung.xime.update.AppUpdateCatalog
 import com.kingzcheung.xime.update.ReleaseNote
 import com.kingzcheung.xime.update.ReleaseNoteMarkdown
@@ -69,7 +68,7 @@ fun ReleaseNotesContent(onBack: () -> Unit) {
     val notes by produceState<List<ReleaseNote>?>(null) {
         value = withContext(Dispatchers.IO) { ReleaseNotes.load(context) }
     }
-    val releasesPage = AppUpdateCatalog.releasesPage(DownloadMirrors.prefersDomestic(context))
+    val releasesPage = AppUpdateCatalog.releasesPage()
 
     Scaffold(
         containerColor = MaterialTheme.colorScheme.surface,

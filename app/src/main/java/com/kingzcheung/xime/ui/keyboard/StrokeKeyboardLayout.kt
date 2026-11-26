@@ -214,7 +214,7 @@ onKeyPressDown: ((String) -> Unit)?,
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
-                        .padding(start = 4.dp, end = 4.dp, bottom = KeyboardGridBottomMargin),
+                        .padding(start = 4.dp, end = 4.dp, bottom = LocalKeyboardGridBottomMargin.current),
                 ) {
                     StrokeKeyboardContent(
                         onKeyPress = onKeyPress,
@@ -245,7 +245,7 @@ onKeyPressDown: ((String) -> Unit)?,
                 Row(
                     modifier = Modifier
                         .fillMaxSize()
-                        .padding(start = 4.dp, end = 4.dp, bottom = KeyboardGridBottomMargin),
+                        .padding(start = 4.dp, end = 4.dp, bottom = LocalKeyboardGridBottomMargin.current),
                     horizontalArrangement = Arrangement.Start
                 ) {
                     StrokeKeyboardContent(

@@ -427,6 +427,9 @@ fun KeyboardView(
         LocalDpPerMillimeter provides rememberDpPerMillimeter(),
         LocalSplitGapPreview provides splitGapPreview.takeIf { resizeActive },
         LocalFloatingBottomClearance provides if (state.isFloatingMode) floatingBottomClearance else null,
+        // 固定键盘底下就是系统栏（或键盘自己的底部留白）：键区不再在底排下面多留那 8 dp，
+        // 最下一排直接贴着卡片底边，空格键下面不再多出一条黑（11-26 用户）。悬浮键盘的拖动条照旧。
+        LocalKeyboardGridBottomMargin provides if (state.isFloatingMode) KeyboardGridBottomMargin else 0.dp,
         com.kingzcheung.xime.ui.theme.LocalMaterialPalette provides
             com.kingzcheung.xime.ui.theme.MaterialPalette(keyboardBgColor, accentColor),
         LocalKeyboardExplicitWidth provides (state.keyboardWidthDp > 0 || (!state.isFloatingMode && (state.fixedWidthDp > 0 || resizeActive))),

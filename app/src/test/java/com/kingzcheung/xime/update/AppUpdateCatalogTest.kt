@@ -112,7 +112,7 @@ class AppUpdateCatalogTest {
     @Test
     fun eachSourceFallsBackToTheOther() {
         val fromModelScope = AppUpdateCatalog.withMirror(AppUpdateCatalog.latest(modelscope, false, listOf("arm64-v8a"))!!, true)
-        assertEquals(listOf("https://github.com/Cyletix/CyIME/releases/download/1.15.47/CyIME-1.15.47-arm64-v8a.apk"),
+        assertEquals(listOf(AppUpdateCatalog.githubAssetUrl("1.15.47", "CyIME-1.15.47-arm64-v8a.apk")),
             fromModelScope.asset!!.mirrors)
         val fromGitHub = AppUpdateCatalog.withMirror(AppUpdateCatalog.latest(releases, false, listOf("arm64-v8a"))!!, false)
         assertEquals(listOf(AppUpdateCatalog.modelscopeAssetUrl("1.14.156", "CyIME-1.14.156-arm64-v8a.apk")),
@@ -122,9 +122,10 @@ class AppUpdateCatalogTest {
     }
 
     @Test
-    fun domesticUsersOpenModelScope() {
-        assertEquals(AppUpdateCatalog.MODELSCOPE_PAGE, AppUpdateCatalog.releasesPage(domestic = true))
-        assertEquals(AppUpdateCatalog.RELEASES_PAGE, AppUpdateCatalog.releasesPage(domestic = false))
+    fun releasePageIsThisReposGitHub() {
+        // 本仓只发 GitHub Releases，没有魔搭镜像：国内也打开本仓发布页。
+        assertEquals(AppUpdateCatalog.RELEASES_PAGE, AppUpdateCatalog.releasesPage())
+        assertEquals("https://github.com/Lrxc/CyIME/releases", AppUpdateCatalog.RELEASES_PAGE)
     }
 
     @Test

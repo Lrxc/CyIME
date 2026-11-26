@@ -128,7 +128,7 @@ fun SymbolKeyboardLayout(
             .fillMaxWidth()
             .inheritKeyboardBackground(inheritBackground)
             .keyboardPanelBackground(backgroundColor)
-            .padding(bottom = KeyboardGridBottomMargin)
+            .padding(bottom = LocalKeyboardGridBottomMargin.current)
     ) {
         // 内容区：符号网格 + HorizontalPager
         BoxWithConstraints(
