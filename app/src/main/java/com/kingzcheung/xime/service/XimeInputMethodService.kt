@@ -3045,9 +3045,7 @@ class XimeInputMethodService : InputMethodService(), LifecycleOwner, SavedStateR
                            }
 
                            }
-                            if (!state.isFloatingMode && navBarDp > 0.dp) {
-                                Spacer(modifier = Modifier.fillMaxWidth().height(navBarDp))
-                            }
+                            
                        }
                       }
                  }
