@@ -16,7 +16,7 @@ tasks.register("clearPlugins", DefaultTask::class) {
     description = "Clear all plugin data from device (requires connected device with adb)"
 
     doLast {
-        val packageName = "com.cyletix.cyime"
+        val packageName = "com.iflytek.inputmethod.miui"
         val pluginsDir = "/data/data/$packageName/files/plugins"
 
         println("=== Clearing CyIME plugin data ===")
@@ -43,7 +43,7 @@ tasks.register("uninstallApp", DefaultTask::class) {
     description = "Completely uninstall CyIME app (clear all data)"
 
     doLast {
-        val packageName = "com.cyletix.cyime"
+        val packageName = "com.iflytek.inputmethod.miui"
 
         println("=== Completely uninstalling CyIME app ===")
 

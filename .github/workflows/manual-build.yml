@@ -25,16 +25,6 @@ on:
         options:
           - arm64-v8a
           - all
-      elder_edition:
-        description: '是否打包老人精简版（-PelderEdition=true）'
-        required: false
-        default: false
-        type: boolean
-      build_plugins:
-        description: '是否同时打包 Lua 插件（.xipk）'
-        required: false
-        default: true
-        type: boolean
       publish_release:
         description: '是否同时发布到 GitHub Pre-release（默认仅上传到 Actions Artifact）'
         required: false
@@ -133,7 +123,6 @@ jobs:
           BUILD_TYPE="${{ inputs.build_type }}"
           BUNDLE_MODELS="${{ inputs.bundle_models }}"
           ABI_MODE="${{ inputs.abi }}"
-          ELDER="${{ inputs.elder_edition }}"
 
           if [ "$BUILD_TYPE" = "offline" ] && [ "$BUNDLE_MODELS" != "true" ]; then
             echo "::notice::offline 构建类型无联网权限，已自动启用 bundleModels=true"
@@ -157,10 +146,6 @@ jobs:
 
           if [ "$BUNDLE_MODELS" = "true" ]; then
             GRADLE_ARGS+=("-PbundleModels=true" "-PpythonExecutable=python3")
-          fi
-
-          if [ "$ELDER" = "true" ]; then
-            GRADLE_ARGS+=("-PelderEdition=true")
           fi
 
           echo "Running: ./gradlew ${GRADLE_ARGS[*]}"
@@ -215,18 +200,11 @@ jobs:
             echo "Verified signature: $apk"
           done
 
-      - name: Build Plugin XIPKs
-        if: inputs.build_plugins
-        run: bash scripts/build-plugins.sh
-
       - name: Collect artifacts
         id: collect
         run: |
           mkdir -p dist-artifacts
           cp "${{ steps.build_apk.outputs.out_dir }}"/*.apk dist-artifacts/
-          if [ "${{ inputs.build_plugins }}" = "true" ] && [ -d build/plugin-release ]; then
-            cp build/plugin-release/*.xipk dist-artifacts/
-          fi
           FILES=$(find dist-artifacts -type f | sort | tr '\n' ',' | sed 's/,$//')
           echo "files=$FILES" >> "$GITHUB_OUTPUT"
           ls -lh dist-artifacts
@@ -250,7 +228,6 @@ jobs:
             - **Build Type**: `${{ inputs.build_type }}`
             - **Bundle Models**: `${{ steps.build_apk.outputs.bundle_models }}`
             - **ABI**: `${{ inputs.abi }}`
-            - **Elder Edition**: `${{ inputs.elder_edition }}`
             - **Release Key Signed**: `${{ steps.signing.outputs.has_release_key }}`
           files: dist-artifacts/*
           prerelease: true
@@ -267,7 +244,6 @@ jobs:
             echo "- **Build Type**: \`${{ inputs.build_type }}\`"
             echo "- **Bundle Models**: \`${{ steps.build_apk.outputs.bundle_models }}\`"
             echo "- **ABI**: \`${{ inputs.abi }}\`"
-            echo "- **Elder Edition**: \`${{ inputs.elder_edition }}\`"
             echo "- **Release Secrets Signed**: \`${{ steps.signing.outputs.has_release_key }}\`"
             echo ""
             echo "### Artifacts"

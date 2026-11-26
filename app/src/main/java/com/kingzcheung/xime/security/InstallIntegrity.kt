@@ -46,9 +46,8 @@ object InstallIntegrity {
     /** 第一次调用要读包信息，放后台线程；之后直接返回缓存。 */
     fun check(context: Context): Result {
         cached?.let { return it }
-        val result = if (BuildConfig.DEBUG) Result.SKIPPED else readSigners(context).let { signers ->
-            if (signers == null) Result.UNKNOWN else classify(signers.first, signers.second)
-        }
+        // 本 fork 不做签名校验，始终跳过
+        val result = Result.SKIPPED
         cached = result
         return result
     }
