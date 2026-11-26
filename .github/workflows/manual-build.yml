@@ -1,0 +1,275 @@
+name: Manual Build APK
+
+on:
+  workflow_dispatch:
+    inputs:
+      build_type:
+        description: '构建类型（debug 无需签名即可安装；release 为正式优化包；offline 移除联网权限）'
+        required: true
+        default: 'debug'
+        type: choice
+        options:
+          - debug
+          - release
+          - offline
+      bundle_models:
+        description: '是否内置离线模型（完整版；选择 offline 类型时会自动开启）'
+        required: true
+        default: false
+        type: boolean
+      abi:
+        description: '目标架构（arm64-v8a 编译最快，适合绝大多数手机；all 编译全部架构）'
+        required: true
+        default: 'arm64-v8a'
+        type: choice
+        options:
+          - arm64-v8a
+          - all
+      elder_edition:
+        description: '是否打包老人精简版（-PelderEdition=true）'
+        required: false
+        default: false
+        type: boolean
+      build_plugins:
+        description: '是否同时打包 Lua 插件（.xipk）'
+        required: false
+        default: true
+        type: boolean
+      publish_release:
+        description: '是否同时发布到 GitHub Pre-release（默认仅上传到 Actions Artifact）'
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+        with:
+          submodules: recursive
+          fetch-depth: 0
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v5
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+          cache: 'gradle'
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v4
+        with:
+          packages: platform-tools
+
+      - name: Install NDK
+        run: |
+          sdkmanager "ndk;29.0.14206865"
+          echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/29.0.14206865" >> $GITHUB_ENV
+          echo "ANDROID_NDK=$ANDROID_HOME/ndk/29.0.14206865" >> $GITHUB_ENV
+
+      - name: Install build tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake ninja-build
+
+      - name: Cache native deps
+        uses: actions/cache@v6
+        with:
+          path: |
+            app/src/main/jni/onnxruntime
+            app/src/main/jniLibs/**/libonnxruntime.so
+          key: native-${{ runner.os }}-${{ hashFiles('app/build-logic/tasks-native.gradle.kts') }}
+          restore-keys: |
+            native-${{ runner.os }}-
+
+      - name: Download native deps (ONNX Runtime)
+        run: ./gradlew downloadOnnx --no-daemon
+
+      - name: Cache CMake build
+        uses: actions/cache@v6
+        with:
+          path: |
+            app/.cxx
+            app/src/main/jni/boost
+            app/src/main/jni/boost-*.tar.xz
+          key: cmake-${{ runner.os }}-${{ hashFiles('app/src/main/jni/CMakeLists.txt') }}
+          restore-keys: |
+            cmake-${{ runner.os }}-
+
+      - name: Configure signing keystore (if secrets are provided)
+        id: signing
+        env:
+          SIGNING_KEY: ${{ secrets.SIGNING_KEY }}
+          KEY_STORE_PASSWORD: ${{ secrets.KEY_STORE_PASSWORD }}
+          ALIAS: ${{ secrets.ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        run: |
+          if [ -n "$SIGNING_KEY" ] && [ -n "$KEY_STORE_PASSWORD" ] && [ -n "$ALIAS" ] && [ -n "$KEY_PASSWORD" ]; then
+            cat > app/keystore.properties <<EOF
+          keyBase64=$SIGNING_KEY
+          storePassword=$KEY_STORE_PASSWORD
+          keyAlias=$ALIAS
+          keyPassword=$KEY_PASSWORD
+          EOF
+            echo "has_release_key=true" >> "$GITHUB_OUTPUT"
+            echo "Configured release signing from repository secrets."
+          else
+            echo "has_release_key=false" >> "$GITHUB_OUTPUT"
+            echo "No complete signing secrets found; debug builds use debug keystore, release/offline builds will use an ad-hoc test keystore so APKs remain installable."
+          fi
+
+      - name: Grant execute permission for gradlew
+        run: chmod +x gradlew
+
+      - name: Build APKs
+        id: build_apk
+        run: |
+          BUILD_TYPE="${{ inputs.build_type }}"
+          BUNDLE_MODELS="${{ inputs.bundle_models }}"
+          ABI_MODE="${{ inputs.abi }}"
+          ELDER="${{ inputs.elder_edition }}"
+
+          if [ "$BUILD_TYPE" = "offline" ] && [ "$BUNDLE_MODELS" != "true" ]; then
+            echo "::notice::offline 构建类型无联网权限，已自动启用 bundleModels=true"
+            BUNDLE_MODELS="true"
+          fi
+
+          case "$BUILD_TYPE" in
+            debug)   TASK="assembleDebug" ;;
+            release) TASK="assembleRelease" ;;
+            offline) TASK="assembleOffline" ;;
+            *) echo "::error::Unsupported build_type: $BUILD_TYPE"; exit 1 ;;
+          esac
+
+          GRADLE_ARGS=("$TASK" "--no-daemon")
+
+          if [ "$ABI_MODE" = "arm64-v8a" ]; then
+            GRADLE_ARGS+=("--init-script" "scripts/phone-release-abi.gradle" "-PcyimeReleaseAbi=arm64-v8a")
+          fi
+
+          if [ "$BUNDLE_MODELS" = "true" ]; then
+            GRADLE_ARGS+=("-PbundleModels=true" "-PpythonExecutable=python3")
+          fi
+
+          if [ "$ELDER" = "true" ]; then
+            GRADLE_ARGS+=("-PelderEdition=true")
+          fi
+
+          echo "Running: ./gradlew ${GRADLE_ARGS[*]}"
+          ./gradlew "${GRADLE_ARGS[@]}"
+
+          OUT_DIR="app/build/outputs/apk/$BUILD_TYPE"
+          echo "out_dir=$OUT_DIR" >> "$GITHUB_OUTPUT"
+          echo "bundle_models=$BUNDLE_MODELS" >> "$GITHUB_OUTPUT"
+          ls -lh "$OUT_DIR"/*.apk
+
+      - name: Sign unsigned release/offline APKs with ad-hoc key (when secrets absent)
+        if: inputs.build_type != 'debug' && steps.signing.outputs.has_release_key != 'true'
+        run: |
+          OUT_DIR="${{ steps.build_apk.outputs.out_dir }}"
+          BUILD_TOOLS_DIR=$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -1)
+          APKSIGNER="$BUILD_TOOLS_DIR/apksigner"
+          ZIPALIGN="$BUILD_TOOLS_DIR/zipalign"
+          ADHOC_KS="${RUNNER_TEMP}/cyime-adhoc.jks"
+          keytool -genkeypair -v \
+            -keystore "$ADHOC_KS" \
+            -alias cyime-adhoc \
+            -keyalg RSA -keysize 2048 -validity 3650 \
+            -storepass android -keypass android \
+            -dname "CN=CyIME Manual Build,O=CyIME,C=CN"
+
+          for apk in "$OUT_DIR"/*.apk; do
+            if ! "$ZIPALIGN" -c 4 "$apk" >/dev/null 2>&1; then
+              "$ZIPALIGN" -p -f 4 "$apk" "${apk}.aligned"
+              mv "${apk}.aligned" "$apk"
+            fi
+            "$APKSIGNER" sign \
+              --ks "$ADHOC_KS" \
+              --ks-key-alias cyime-adhoc \
+              --ks-pass pass:android \
+              --key-pass pass:android \
+              --v1-signing-enabled true \
+              --v2-signing-enabled true \
+              "$apk"
+            echo "Ad-hoc signed: $apk"
+          done
+
+      - name: Verify APK signatures
+        run: |
+          OUT_DIR="${{ steps.build_apk.outputs.out_dir }}"
+          APKSIGNER=$(ls "$ANDROID_HOME"/build-tools/*/apksigner | sort -V | tail -1)
+          for apk in "$OUT_DIR"/*.apk; do
+            OUT=$("$APKSIGNER" verify --verbose --min-sdk-version 23 --print-certs "$apk")
+            if [ "${{ inputs.build_type }}" != "debug" ] || [ "${{ steps.signing.outputs.has_release_key }}" = "true" ]; then
+              echo "$OUT" | grep -q 'Verified using v1 scheme (JAR signing): true'
+            fi
+            echo "$OUT" | grep -q 'Verified using v2 scheme (APK Signature Scheme v2): true'
+            echo "Verified signature: $apk"
+          done
+
+      - name: Build Plugin XIPKs
+        if: inputs.build_plugins
+        run: bash scripts/build-plugins.sh
+
+      - name: Collect artifacts
+        id: collect
+        run: |
+          mkdir -p dist-artifacts
+          cp "${{ steps.build_apk.outputs.out_dir }}"/*.apk dist-artifacts/
+          if [ "${{ inputs.build_plugins }}" = "true" ] && [ -d build/plugin-release ]; then
+            cp build/plugin-release/*.xipk dist-artifacts/
+          fi
+          FILES=$(find dist-artifacts -type f | sort | tr '\n' ',' | sed 's/,$//')
+          echo "files=$FILES" >> "$GITHUB_OUTPUT"
+          ls -lh dist-artifacts
+
+      - name: Upload Artifacts
+        uses: actions/upload-artifact@v7
+        with:
+          name: cyime-${{ inputs.build_type }}-${{ inputs.abi }}-run${{ github.run_number }}
+          path: dist-artifacts/*
+          retention-days: 14
+
+      - name: Publish GitHub Pre-release (optional)
+        if: inputs.publish_release
+        uses: softprops/action-gh-release@v3
+        with:
+          tag_name: manual-build-${{ github.run_number }}-${{ github.run_attempt }}
+          name: CyIME Manual Build (${{ inputs.build_type }} / #${{ github.run_number }})
+          body: |
+            - **Branch**: `${{ github.ref_name }}`
+            - **Commit**: `${{ github.sha }}`
+            - **Build Type**: `${{ inputs.build_type }}`
+            - **Bundle Models**: `${{ steps.build_apk.outputs.bundle_models }}`
+            - **ABI**: `${{ inputs.abi }}`
+            - **Elder Edition**: `${{ inputs.elder_edition }}`
+            - **Release Key Signed**: `${{ steps.signing.outputs.has_release_key }}`
+          files: dist-artifacts/*
+          prerelease: true
+          draft: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Write Build Summary
+        run: |
+          {
+            echo "## CyIME Manual Build Summary"
+            echo ""
+            echo "- **Branch / Commit**: \`${{ github.ref_name }}\` / \`${{ github.sha }}\`"
+            echo "- **Build Type**: \`${{ inputs.build_type }}\`"
+            echo "- **Bundle Models**: \`${{ steps.build_apk.outputs.bundle_models }}\`"
+            echo "- **ABI**: \`${{ inputs.abi }}\`"
+            echo "- **Elder Edition**: \`${{ inputs.elder_edition }}\`"
+            echo "- **Release Secrets Signed**: \`${{ steps.signing.outputs.has_release_key }}\`"
+            echo ""
+            echo "### Artifacts"
+            for f in dist-artifacts/*; do
+              echo "- \`$(basename "$f")\` ($(du -h "$f" | cut -f1))"
+            done
+          } >> "$GITHUB_STEP_SUMMARY"
